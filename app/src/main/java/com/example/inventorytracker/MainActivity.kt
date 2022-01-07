@@ -2,9 +2,13 @@ package com.example.inventorytracker
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
+import androidx.room.Room
 import com.example.inventorytracker.databinding.ActivityMainBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -18,6 +22,11 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        val db = Room.databaseBuilder(
+            applicationContext,
+            InventoryDatabase::class.java, "inventory"
+        ).build()
+
         binding.inventoryRecycler.adapter = _adapter
         binding.addFab.setOnClickListener {
             startActivity(
@@ -28,14 +37,36 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        // TODO: Get items from database and update
+        GlobalScope.launch {
+            val items = db.inventoryDao().getAll()
 
-        _adapter.updateListener = { item, updatedQuantity ->
-            // TODO: Update in database
+            withContext(Dispatchers.Main) {
+                _adapter.data = items
+            }
         }
 
-        _adapter.deleteListener = {
-            // TODO: Delete in database and reset items
+        _adapter.updateListener = { item, updatedQuantity ->
+            GlobalScope.launch {
+                db.inventoryDao().update(
+                    item.copy(quantity = updatedQuantity)
+                )
+
+                val items = db.inventoryDao().getAll()
+                withContext(Dispatchers.Main) {
+                    _adapter.data = items
+                }
+            }
+        }
+
+        _adapter.deleteListener = { item ->
+            GlobalScope.launch {
+                db.inventoryDao().delete(item)
+
+                val items = db.inventoryDao().getAll()
+                withContext(Dispatchers.Main) {
+                    _adapter.data = items
+                }
+            }
         }
     }
 }
